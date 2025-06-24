@@ -27,21 +27,25 @@ class HotcoursesScraper:
         self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
         self.programs = []
 
-    def run(self, url, max_pages=2):
+    def run(self, base_url, max_pages=2):
         for page in range(1, max_pages + 1):
-            full_url = f"{url}&pageNo={page}"
-            logging.info(f"Scraping: {full_url}")
-            self.driver.get(full_url)
+            url = self.append_page_param(base_url, page)
+            logging.info(f"Scraping: {url}")
+            self.driver.get(url)
 
             try:
-                WebDriverWait(self.driver, 10).until(
+                WebDriverWait(self.driver, 12).until(
                     EC.presence_of_element_located((By.CLASS_NAME, "searchResults__cardWrapper"))
                 )
-                time.sleep(1)
-                soup = BeautifulSoup(self.driver.page_source, "html.parser")
-                self.extract(soup)
+                time.sleep(2)
+
+                # Save screenshot before parsing
+                self.driver.save_screenshot(f"screenshot_page_{page}.png")
+                soup = BeautifulSoup(self.driver.page_source, 'html.parser')
+                self.parse_page(soup)
             except Exception as e:
                 logging.warning(f"Failed to scrape page {page}: {e}")
+                self.driver.save_screenshot(f"error_page_{page}.png")
                 continue
 
     def extract(self, soup):
