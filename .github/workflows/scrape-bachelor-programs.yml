@@ -22,10 +22,10 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run scraper
-        run: python bachelor_portal_scraper.py
+        run: python bachelor-portal-scraper.py
 
       - name: Run data processor
-        run: python bachelor_data_processor.py
+        run: python bachelor-data-processor.py
 
       - name: Upload to Supabase
         run: python upload_to_supabase.py
