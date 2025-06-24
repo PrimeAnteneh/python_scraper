@@ -15,6 +15,12 @@ import re
 
 logging.basicConfig(level=logging.INFO)
 
+def slugify(text):
+    text = text.lower()
+    text = re.sub(r'[^\w\s-]', '', text)
+    text = re.sub(r'\s+', '-', text)
+    return text
+
 class BachelorsPortalSeleniumScraper:
     def __init__(self, headless=True):
         chrome_options = Options()
@@ -75,13 +81,7 @@ class BachelorsPortalSeleniumScraper:
             except Exception as e:
                 logging.warning(f"Error parsing program: {e}")
         return programs
-
-    def slugify(text):
-        text = text.lower()
-        text = re.sub(r'[^\w\s-]', '', text)
-        text = re.sub(r'\s+', '-', text)
-        return text
-
+        
     def run_scraper(self, country, discipline, pages=1):
         all_programs = []
         for page in range(1, pages + 1):
