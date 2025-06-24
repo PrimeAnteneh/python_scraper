@@ -42,12 +42,21 @@ jobs:
 
       - name: Run scraper in X virtual framebuffer
         run: xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' python bachelorsportal-scraper.py
-      - name: Upload screenshot on failure
-        if: failure()
+      - name: Upload screenshot if it exists
+        run: |
+          if [ -f error_screenshot.png ]; then
+            echo "Uploading screenshot..."
+          else
+            echo "No screenshot found to upload."
+          fi
+        continue-on-error: true
+      - name: Upload error screenshot artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: error-screenshot
           path: error_screenshot.png
+          
       - name: Run processor
         run: python bachelor-data-processor.py
 
