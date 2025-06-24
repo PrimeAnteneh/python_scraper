@@ -8,6 +8,9 @@ import json
 import logging
 from datetime import datetime
 from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 logging.basicConfig(level=logging.INFO)
 
@@ -31,10 +34,13 @@ class BachelorsPortalSeleniumScraper:
     def fetch_page(self, url):
         try:
             self.driver.get(url)
-            time.sleep(3)  # allow JS to render
+            WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.CLASS_NAME, "ProgramCard"))
+            )
+            logging.info("Program cards loaded successfully.")
             return self.driver.page_source
         except Exception as e:
-            logging.error(f"Failed to fetch {url}: {str(e)}")
+            logging.warning(f"Timeout or error fetching {url}: {e}")
             return None
 
     def extract_programs_from_page(self, html):
