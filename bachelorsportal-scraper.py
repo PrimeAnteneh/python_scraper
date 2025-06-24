@@ -21,7 +21,8 @@ class BachelorsPortalSeleniumScraper:
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
 
-        self.driver = webdriver.Chrome(ChromeDriverManager().install(), options=chrome_options)
+        self.driver = webdriver.Chrome(executable_path=ChromeDriverManager().install(), options=chrome_options)
+        #self.driver = webdriver.Chrome(ChromeDriverManager().install(), options=chrome_options)
         self.base_url = "https://www.bachelorsportal.com"
         self.programs_data = []
 
