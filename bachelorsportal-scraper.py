@@ -47,17 +47,30 @@ class BachelorsPortalSeleniumScraper:
         #self.driver = webdriver.Chrome(ChromeDriverManager().install(), options=chrome_options)
         self.base_url = "https://www.bachelorsportal.com"
         self.programs_data = []
-
     def fetch_page(self, url):
         try:
             self.driver.get(url)
-            WebDriverWait(self.driver, 10).until(
+        
+            # Wait for page to load or timeout
+            WebDriverWait(self.driver, 15).until(
                 EC.presence_of_element_located((By.CLASS_NAME, "ProgramCard"))
             )
-            logging.info("Program cards loaded successfully.")
+
+            # Take screenshot for debugging
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            screenshot_path = f"screenshot_{ts}.png"
+            self.driver.save_screenshot(screenshot_path)
+            logging.info(f"Saved screenshot to {screenshot_path}")
+
             return self.driver.page_source
+
         except Exception as e:
             logging.warning(f"Timeout or error fetching {url}: {e}")
+            try:
+                self.driver.save_screenshot("error_screenshot.png")
+                logging.info("Saved error screenshot: error_screenshot.png")
+            except:
+                logging.warning("Could not save screenshot.")
             return None
 
     def extract_programs_from_page(self, html):
