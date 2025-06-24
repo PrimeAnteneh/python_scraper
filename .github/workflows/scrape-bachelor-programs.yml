@@ -22,7 +22,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run scraper
-        run: python bachelor-portal-scraper.py
+        run: python bachelorsportal-scraper.py
 
       - name: Run data processor
         run: python bachelor-data-processor.py
