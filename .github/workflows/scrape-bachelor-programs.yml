@@ -44,7 +44,7 @@ jobs:
         run: python bachelorsportal-scraper.py
       - name: Upload screenshot on failure
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: error-screenshot
           path: error_screenshot.png
