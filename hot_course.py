@@ -8,8 +8,25 @@ from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
 import json, logging, time
 from datetime import datetime
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 logging.basicConfig(level=logging.INFO)
+
+def append_page_param(self, url, page_num):
+    parsed = urlparse(url)
+    # Get existing fragment query string (after #search&)
+    if '#' in url and 'search&' in url:
+        fragment = parsed.fragment
+        qs_string = fragment.split('search&')[-1]
+        query = parse_qs(qs_string)
+        query['pageNo'] = [str(page_num)]
+        new_query = urlencode(query, doseq=True)
+        new_fragment = f"search&{new_query}"
+        parsed = parsed._replace(fragment=new_fragment)
+        return urlunparse(parsed)
+    else:
+        # fallback: just append pageNo as query param
+        return f"{url}&pageNo={page_num}"
 
 class HotcoursesScraper:
     def __init__(self, headless=True):
