@@ -21,7 +21,16 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget unzip xvfb libxi6 libgconf-2-4 libnss3 libasound2 libatk-bridge2.0-0 libgtk-3-0 libxss1
+          sudo apt-get install -y \
+            wget \
+            unzip \
+            xvfb \
+            libxi6 \
+            libnss3 \
+            libatk-bridge2.0-0 \
+            libgtk-3-0 \
+            libxss1 \
+            libasound2t64
 
       - name: Install Chrome
         run: |
@@ -31,10 +40,10 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt
 
-      - name: Run scraper with Selenium
+      - name: Run scraper
         run: python bachelor_portal_scraper.py
 
-      - name: Run data processor
+      - name: Run processor
         run: python bachelor_data_processor.py
 
       - name: Upload to Supabase
@@ -42,3 +51,4 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+
