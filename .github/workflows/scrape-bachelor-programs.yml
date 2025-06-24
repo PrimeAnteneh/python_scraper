@@ -18,14 +18,24 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip xvfb libxi6 libgconf-2-4 libnss3 libasound2 libatk-bridge2.0-0 libgtk-3-0 libxss1
+
+      - name: Install Chrome
+        run: |
+          wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -f install -y
+
+      - name: Install Python dependencies
         run: pip install -r requirements.txt
 
-      - name: Run scraper
-        run: python bachelorsportal-scraper.py
+      - name: Run scraper with Selenium
+        run: python bachelor_portal_scraper.py
 
       - name: Run data processor
-        run: python bachelor-data-processor.py
+        run: python bachelor_data_processor.py
 
       - name: Upload to Supabase
         run: python upload_to_supabase.py
