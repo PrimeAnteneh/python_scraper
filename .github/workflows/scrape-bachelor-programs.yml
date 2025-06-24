@@ -42,7 +42,12 @@ jobs:
 
       - name: Run scraper
         run: python bachelorsportal-scraper.py
-
+      - name: Upload screenshot on failure
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: error-screenshot
+          path: error_screenshot.png
       - name: Run processor
         run: python bachelor-data-processor.py
 
