@@ -47,21 +47,30 @@ class HotcoursesScraper:
         for page in range(1, max_pages + 1):
             url = self.append_page_param(base_url, page)
             logging.info(f"Scraping: {url}")
-            self.driver.get(url)
-
             try:
-                WebDriverWait(self.driver, 12).until(
+                self.driver.get(url)
+                time.sleep(2)  # allow some JS to render
+
+                # Save screenshot before anything else
+                screenshot_path = f"screenshot_page_{page}.png"
+                self.driver.save_screenshot(screenshot_path)
+                logging.info(f"Saved screenshot: {screenshot_path}")
+
+                WebDriverWait(self.driver, 10).until(
                     EC.presence_of_element_located((By.CLASS_NAME, "searchResults__cardWrapper"))
                 )
-                time.sleep(2)
 
-                # Save screenshot before parsing
-                self.driver.save_screenshot(f"screenshot_page_{page}.png")
                 soup = BeautifulSoup(self.driver.page_source, 'html.parser')
                 self.parse_page(soup)
+
             except Exception as e:
                 logging.warning(f"Failed to scrape page {page}: {e}")
-                self.driver.save_screenshot(f"error_page_{page}.png")
+                error_screenshot_path = f"error_page_{page}.png"
+                try:
+                    self.driver.save_screenshot(error_screenshot_path)
+                    logging.info(f"Saved error screenshot: {error_screenshot_path}")
+                except Exception as screenshot_error:
+                    logging.warning(f"Could not save error screenshot: {screenshot_error}")
                 continue
 
     def extract(self, soup):
