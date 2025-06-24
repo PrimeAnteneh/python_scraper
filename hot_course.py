@@ -1,0 +1,84 @@
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
+from bs4 import BeautifulSoup
+import json, logging, time
+from datetime import datetime
+
+logging.basicConfig(level=logging.INFO)
+
+class HotcoursesScraper:
+    def __init__(self, headless=True):
+        chrome_options = Options()
+        if headless:
+            chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--window-size=1920,1080")
+        chrome_options.add_argument("--disable-extensions")
+        chrome_options.add_argument("--disable-infobars")
+        chrome_options.add_argument("--remote-debugging-port=9222")
+        chrome_options.add_argument("--user-agent=Mozilla/5.0")
+        self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+        self.programs = []
+
+    def run(self, url, max_pages=2):
+        for page in range(1, max_pages + 1):
+            full_url = f"{url}&pageNo={page}"
+            logging.info(f"Scraping: {full_url}")
+            self.driver.get(full_url)
+
+            try:
+                WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located((By.CLASS_NAME, "searchResults__cardWrapper"))
+                )
+                time.sleep(1)
+                soup = BeautifulSoup(self.driver.page_source, "html.parser")
+                self.extract(soup)
+            except Exception as e:
+                logging.warning(f"Failed to scrape page {page}: {e}")
+                continue
+
+    def extract(self, soup):
+        cards = soup.select(".searchResults__cardWrapper")
+        for card in cards:
+            try:
+                title = card.select_one(".course-title a")
+                university = card.select_one(".institution-title")
+                location = card.select_one(".location")
+                fees = card.find(text="Fees") or card.find(text="Tuition fees")
+                duration = card.find(text="Duration")
+                
+                self.programs.append({
+                    "title": title.text.strip() if title else "N/A",
+                    "url": title["href"] if title and title.get("href") else "N/A",
+                    "university": university.text.strip() if university else "N/A",
+                    "location": location.text.strip() if location else "N/A",
+                    "tuition": fees.parent.text.strip() if fees else "N/A",
+                    "duration": duration.parent.text.strip() if duration else "N/A"
+                })
+            except Exception as e:
+                logging.warning(f"Error parsing a card: {e}")
+
+    def save(self):
+        file_name = f"hotcourses_programs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        with open(file_name, "w", encoding="utf-8") as f:
+            json.dump(self.programs, f, indent=2, ensure_ascii=False)
+        logging.info(f"✅ Saved {len(self.programs)} programs to {file_name}")
+
+    def close(self):
+        self.driver.quit()
+
+
+# === Run Example ===
+if __name__ == "__main__":
+    scraper = HotcoursesScraper(headless=True)
+    base_url = "https://www.hotcoursesabroad.com/study/training-degrees/international/postgraduate/computer-and-mathematical-science-courses/slevel/3/cgory/e-2/sin/ct/programs.html#search&catCode=E-2&countryId=211&parentQualId=3&nationCode=59&nationCntryCode=59&studyAbroad=Y&studyOnline=N&studyCross=N&studyDomestic=N&studyPartTime=N&startOnlineCampusLater=N&manStdyAbrdFlg=Y&parentCatEngName=Computer%20and%20Mathematical%20Science&fastlane=N"
+    scraper.run(base_url, max_pages=2)
+    scraper.save()
+    scraper.close()
