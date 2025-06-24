@@ -75,10 +75,18 @@ class BachelorsPortalSeleniumScraper:
                 logging.warning(f"Error parsing program: {e}")
         return programs
 
+    def slugify(text):
+        text = text.lower()
+        text = re.sub(r'[^\w\s-]', '', text)
+        text = re.sub(r'\s+', '-', text)
+        return text
+
     def run_scraper(self, country, discipline, pages=1):
         all_programs = []
         for page in range(1, pages + 1):
-            url = f"{self.base_url}/search/bachelors?countries={country}&disciplines={discipline}&page={page}"
+            country_slug = slugify(country)
+            discipline_slug = slugify(discipline)
+            url = f"{self.base_url}/search/bachelor/{discipline_slug}/{country_slug}/page-{page}"
             logging.info(f"Scraping: {url}")
             html = self.fetch_page(url)
             if not html:
