@@ -11,7 +11,7 @@ import time
 import json
 from datetime import datetime
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class ApplyBoardScraper:
     def __init__(self, headless=True):
@@ -49,6 +49,44 @@ class ApplyBoardScraper:
         
         # Additional wait for dynamic content
         time.sleep(3)
+
+    def analyze_html_structure(self, soup):
+        """Analyze and log the HTML structure to understand the layout"""
+        logging.info("🔬 Analyzing HTML structure...")
+        
+        # Find a sample program link
+        sample_link = soup.find('a', href=lambda x: x and '/programs/' in x)
+        if sample_link:
+            # Navigate up to find the card container
+            current = sample_link
+            for level in range(5):
+                parent = current.find_parent()
+                if parent:
+                    # Log the tag and classes
+                    classes = parent.get('class', [])
+                    logging.info(f"Level {level}: <{parent.name}> with classes: {classes}")
+                    
+                    # Get immediate children info
+                    children = [child.name for child in parent.children if hasattr(child, 'name')]
+                    logging.info(f"  Children tags: {children[:5]}...")  # First 5 children
+                    
+                    # Get text preview
+                    text_preview = parent.get_text(strip=True)[:200]
+                    logging.info(f"  Text preview: {text_preview}...")
+                    
+                    current = parent
+            
+            # Also log the complete card HTML for manual inspection
+            card_parent = sample_link.find_parent('div')
+            if card_parent:
+                # Go up until we find a reasonably sized container
+                while card_parent and len(str(card_parent)) < 500:
+                    card_parent = card_parent.find_parent('div')
+                
+                if card_parent:
+                    with open("sample_card.html", "w", encoding="utf-8") as f:
+                        f.write(str(card_parent.prettify()))
+                    logging.info("📄 Saved sample card HTML to sample_card.html")
 
     def run_scraper(self, search_url):
         logging.info(f"🔍 Scraping: {search_url}")
@@ -112,6 +150,11 @@ class ApplyBoardScraper:
             
             # Parse with BeautifulSoup
             soup = BeautifulSoup(self.driver.page_source, 'html.parser')
+            
+            # Analyze structure first
+            self.analyze_html_structure(soup)
+            
+            # Then parse results
             self.parse_results(soup)
 
         except Exception as e:
@@ -129,72 +172,227 @@ class ApplyBoardScraper:
             logging.info(f"Found {len(program_links)} program links")
             for link in program_links:
                 try:
-                    # Get the parent container that likely has all the info
-                    card = link.find_parent('div', recursive=True)
+                    # Get the parent container - try multiple levels up
+                    card = None
+                    current = link
+                    for _ in range(5):  # Go up to 5 levels
+                        parent = current.find_parent(['div', 'article', 'li'])
+                        if parent:
+                            # Check if this parent contains meaningful content
+                            text_content = parent.get_text(strip=True)
+                            if len(text_content) > 50:  # Likely a card with content
+                                card = parent
+                                break
+                            current = parent
+                    
                     if card:
-                        # Extract text content from the card
-                        texts = [text.strip() for text in card.find_all(text=True) if text.strip()]
+                        # Extract all text elements
+                        all_text = card.get_text(separator='\n', strip=True)
+                        lines = [line.strip() for line in all_text.split('\n') if line.strip()]
                         
-                        # Try to identify program info from the texts
+                        # Try to identify program info from the lines
                         program_info = {
                             "title": "N/A",
-                            "school": "N/A",
+                            "school": "N/A", 
                             "location": "N/A",
                             "tuition": "N/A",
                             "url": f"https://www.applyboard.com{link['href']}"
                         }
                         
-                        # Look for patterns in the text
-                        for i, text in enumerate(texts):
-                            # Program titles often contain "Bachelor", "Master", etc.
-                            if any(degree in text for degree in ["Bachelor", "Master", "Associate", "Diploma", "Certificate"]):
-                                program_info["title"] = text
-                            # Universities often contain "University", "College", "Institute"
-                            elif any(inst in text for inst in ["University", "College", "Institute", "School"]):
+                        # Based on your screenshot, parse the structured data
+                        for i, line in enumerate(lines):
+                            # Skip common UI elements
+                            if line in ['High Job Demand', 'Scholarships Available', 'Location', 'Campus city', 'Tuition (1st year)', 'Application fee']:
+                                continue
+                                
+                            # Program titles often contain degree types
+                            if any(degree in line for degree in ["Bachelor", "Master", "Associate", "Diploma", "Certificate", "PhD", "Doctorate"]):
+                                if program_info["title"] == "N/A":
+                                    program_info["title"] = line
+                            # University names
+                            elif any(inst in line for inst in ["University", "College", "Institute", "School", "Academy"]) and "Bachelor" not in line and "Master" not in line:
+                                if program_info["school"] == "N/A":
+                                    program_info["school"] = line
+                            # Location - look for state abbreviations or "USA"
+                            elif ("USA" in line or ", USA" in line or 
+                                  any(state in line for state in ["Washington", "Missouri", "California", "New York", "Texas", "Florida"])):
+                                if "$" not in line:  # Make sure it's not tuition
+                                    program_info["location"] = line
+                            # Tuition
+                            elif "$" in line and "USD" in line:
+                                program_info["tuition"] = line
+                        
+                        # Try to get degree type from the link if not found
+                        if program_info["title"] == "N/A" and "Year" in all_text:
+                            degree_match = None
+                            for line in lines:
+                                if "Year" in line and any(deg in line for deg in ["Bachelor's", "Master's", "Associate"]):
+                                    degree_match = line
+                                    break
+                            if degree_match:
+                                # Look for the next meaningful line after degree type
+                                idx = lines.index(degree_match)
+                                if idx + 1 < len(lines):
+                                    program_info["title"] = lines[idx + 1]
+                        
+                        # Only add if we have meaningful data
+                        if program_info["title"] != "N/A" or program_info["school"] != "N/A":
+                            self.results.append(program_info)
+                            logging.info(f"✓ Found: {program_info['title']} at {program_info['school']}")
+                            
+                except Exception as e:
+                    logging.warning(f"Error parsing card: {e}")
+                    continue
+        
+        # Strategy 2: Direct extraction based on ApplyBoard's structure
+        if not self.results:
+            logging.info("Trying alternative parsing strategy...")
+            # Look for grid items that contain program info
+            grid_items = soup.find_all('div', class_=lambda x: x and 'MuiGrid-item' in str(x))
+            
+            for item in grid_items:
+                try:
+                    link = item.find('a', href=lambda x: x and '/programs/' in x)
+                    if link:
+                        # Extract structured data
+                        all_text = item.get_text(separator='\n', strip=True)
+                        lines = [line.strip() for line in all_text.split('\n') if line.strip()]
+                        
+                        if len(lines) >= 4:  # Minimum expected content
+                            program_info = {
+                                "title": "N/A",
+                                "school": lines[0] if lines else "N/A",  # Usually first line
+                                "location": "N/A",
+                                "tuition": "N/A",
+                                "url": f"https://www.applyboard.com{link['href']}"
+                            }
+                            
+                            # Parse remaining lines
+                            for line in lines[1:]:
+                                if any(degree in line for degree in ["Bachelor", "Master", "Associate", "Diploma"]):
+                                    program_info["title"] = line
+                                elif "$" in line and "USD" in line:
+                                    program_info["tuition"] = line
+                                elif "USA" in line:
+                                    program_info["location"] = line
+                            
+                            if program_info["title"] != "N/A":
+                                self.results.append(program_info)
+                
+                except Exception as e:
+                    continue
+        
+        # Strategy 3: Parse based on ApplyBoard's actual card structure from screenshots
+        if not self.results:
+            logging.info("Trying screenshot-based parsing strategy...")
+            
+            # From the screenshot, we can see the structure has these elements in order:
+            # 1. University name (with logo)
+            # 2. Degree type (e.g., "4-Year Bachelor's Degree")
+            # 3. Program name (e.g., "Bachelor of Science - Computer Science")
+            # 4. Various metadata (High Job Demand, Scholarships Available)
+            # 5. Location info
+            # 6. Tuition info
+            
+            # Find all links to programs
+            all_program_links = soup.find_all('a', href=lambda x: x and '/programs/' in x)
+            
+            for link in all_program_links:
+                try:
+                    # Go up to find the card container - usually 3-4 levels up
+                    card = link
+                    for _ in range(4):
+                        parent = card.find_parent('div')
+                        if parent:
+                            # Check if this looks like a complete card
+                            text = parent.get_text(strip=True)
+                            if all(keyword in text for keyword in ['Location', 'Tuition']):
+                                card = parent
+                                break
+                            card = parent
+                    
+                    if card:
+                        # Get all text blocks
+                        text_blocks = []
+                        for elem in card.find_all(['div', 'span', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
+                            text = elem.get_text(strip=True)
+                            if text and text not in text_blocks:
+                                text_blocks.append(text)
+                        
+                        program_info = {
+                            "title": "N/A",
+                            "school": "N/A",
+                            "location": "N/A", 
+                            "tuition": "N/A",
+                            "degree_type": "N/A",
+                            "url": f"https://www.applyboard.com{link['href']}"
+                        }
+                        
+                        # Parse based on position and content
+                        for i, text in enumerate(text_blocks):
+                            # University names are usually at the top
+                            if i < 3 and any(word in text for word in ["University", "College", "Institute"]):
                                 program_info["school"] = text
-                            # Location patterns
-                            elif ", USA" in text or "USA" in text:
+                            # Degree types
+                            elif "Year" in text and any(deg in text for deg in ["Bachelor", "Master", "Associate"]):
+                                program_info["degree_type"] = text
+                            # Program names with "Bachelor of", "Master of", etc.
+                            elif text.startswith(("Bachelor of", "Master of", "Associate of", "Certificate in")):
+                                program_info["title"] = text
+                            # Location - after "Location" label
+                            elif i > 0 and text_blocks[i-1] == "Location" and "USA" in text:
                                 program_info["location"] = text
-                            # Tuition patterns
-                            elif "$" in text and "USD" in text:
+                            # Campus city - might be separate from state
+                            elif i > 0 and text_blocks[i-1] == "Campus city":
+                                campus = text
+                                # Check if next item might be state
+                                if i + 1 < len(text_blocks) and "USA" in text_blocks[i + 1]:
+                                    program_info["location"] = f"{campus}, {text_blocks[i + 1]}"
+                            # Tuition
+                            elif "$" in text and "USD" in text and "Tuition" in str(text_blocks[max(0, i-2):i+1]):
                                 program_info["tuition"] = text
                         
-                        if program_info["title"] != "N/A":  # Only add if we found a title
+                        # Add if we have key information
+                        if (program_info["title"] != "N/A" or program_info["school"] != "N/A"):
                             self.results.append(program_info)
                             
                 except Exception as e:
-                    logging.warning(f"Error parsing link: {e}")
-        
-        # Strategy 2: Look for any div/article elements that might be cards
+                    logging.warning(f"Error in strategy 3: {e}")
+                    continue
         if not self.results:
-            potential_cards = soup.find_all(['div', 'article'], class_=lambda x: x and any(keyword in str(x).lower() for keyword in ['card', 'result', 'program', 'item']))
-            logging.info(f"Found {len(potential_cards)} potential card elements")
+            logging.info("Trying alternative parsing strategy...")
+            # Look for grid items that contain program info
+            grid_items = soup.find_all('div', class_=lambda x: x and 'MuiGrid-item' in str(x))
             
-            for card in potential_cards[:20]:  # Limit to first 20 to avoid duplicates
+            for item in grid_items:
                 try:
-                    texts = [text.strip() for text in card.find_all(text=True) if text.strip()]
-                    if len(texts) >= 3:  # A valid card should have multiple text elements
-                        # Look for a link
-                        link = card.find('a', href=True)
+                    link = item.find('a', href=lambda x: x and '/programs/' in x)
+                    if link:
+                        # Extract structured data
+                        all_text = item.get_text(separator='\n', strip=True)
+                        lines = [line.strip() for line in all_text.split('\n') if line.strip()]
                         
-                        program_info = {
-                            "title": texts[0] if texts else "N/A",
-                            "school": texts[1] if len(texts) > 1 else "N/A",
-                            "location": texts[2] if len(texts) > 2 else "N/A",
-                            "tuition": "N/A",
-                            "url": f"https://www.applyboard.com{link['href']}" if link else "N/A"
-                        }
-                        
-                        # Refine by looking for specific patterns
-                        for text in texts:
-                            if "$" in text and "USD" in text:
-                                program_info["tuition"] = text
-                            elif ", USA" in text:
-                                program_info["location"] = text
-                        
-                        if link and "/programs/" in str(link.get('href', '')):
-                            self.results.append(program_info)
+                        if len(lines) >= 4:  # Minimum expected content
+                            program_info = {
+                                "title": "N/A",
+                                "school": lines[0] if lines else "N/A",  # Usually first line
+                                "location": "N/A",
+                                "tuition": "N/A",
+                                "url": f"https://www.applyboard.com{link['href']}"
+                            }
                             
+                            # Parse remaining lines
+                            for line in lines[1:]:
+                                if any(degree in line for degree in ["Bachelor", "Master", "Associate", "Diploma"]):
+                                    program_info["title"] = line
+                                elif "$" in line and "USD" in line:
+                                    program_info["tuition"] = line
+                                elif "USA" in line:
+                                    program_info["location"] = line
+                            
+                            if program_info["title"] != "N/A":
+                                self.results.append(program_info)
+                
                 except Exception as e:
                     continue
         
@@ -208,6 +406,14 @@ class ApplyBoardScraper:
         
         self.results = unique_results
         logging.info(f"📊 Parsed {len(self.results)} unique programs")
+        
+        # Debug: Print first few results
+        if self.results:
+            logging.info("Sample parsed data:")
+            for i, result in enumerate(self.results[:3]):
+                logging.info(f"{i+1}. URL: {result['url'][:50]}...")
+                logging.info(f"   Title: {result['title']}")
+                logging.info(f"   School: {result['school']}")
 
     def save_to_file(self):
         filename = f"applyboard_programs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
@@ -218,11 +424,16 @@ class ApplyBoardScraper:
         # Also save a summary
         if self.results:
             logging.info("\n📋 Sample results:")
-            for i, result in enumerate(self.results[:3]):
-                logging.info(f"\n{i+1}. {result['title']}")
-                logging.info(f"   School: {result['school']}")
-                logging.info(f"   Location: {result['location']}")
-                logging.info(f"   Tuition: {result['tuition']}")
+            for i, result in enumerate(self.results[:5]):  # Show up to 5 samples
+                logging.info(f"\n{i+1}. {result.get('title', 'N/A')}")
+                logging.info(f"   School: {result.get('school', 'N/A')}")
+                logging.info(f"   Location: {result.get('location', 'N/A')}")
+                logging.info(f"   Tuition: {result.get('tuition', 'N/A')}")
+                if 'degree_type' in result:
+                    logging.info(f"   Degree Type: {result.get('degree_type', 'N/A')}")
+                logging.info(f"   URL: {result.get('url', 'N/A')[:50]}...")
+        else:
+            logging.warning("⚠️ No programs were parsed. Check the HTML structure in 'applyboard_source.html' and 'sample_card.html'")
 
     def close(self):
         self.driver.quit()
