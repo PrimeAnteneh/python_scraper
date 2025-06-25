@@ -43,7 +43,7 @@ jobs:
       - name: Run scraper in X virtual framebuffer
         run: xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' python applybroad.py
       - name: Upload scraped data
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
             name: applyboard-data
             path: |
