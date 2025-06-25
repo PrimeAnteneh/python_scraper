@@ -41,7 +41,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run scraper in X virtual framebuffer
-        run: xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' python education_scrap.py
+        run: xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' python applyboard.py
       - name: Upload screenshot if it exists
         run: |
           if [ -f error_screenshot.png ]; then
