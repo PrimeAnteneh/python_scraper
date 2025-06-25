@@ -36,10 +36,11 @@ class ApplyBoardScraper:
             # Save screenshot early
             self.driver.save_screenshot("applyboard_loaded.png")
 
-            WebDriverWait(self.driver, 12).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "[data-testid='search-result-card']"))
+            WebDriverWait(self.driver, 20).until(
+                EC.presence_of_all_elements_located((By.CSS_SELECTOR, "[data-testid='search-result-card']"))
             )
-            time.sleep(2)
+            
+            time.sleep(5)
             soup = BeautifulSoup(self.driver.page_source, 'html.parser')
             self.parse_results(soup)
 
