@@ -33,15 +33,23 @@ class ApplyBoardScraper:
         self.driver.get(search_url)
 
         try:
+            # Save screenshot early
+            self.driver.save_screenshot("applyboard_loaded.png")
+
             WebDriverWait(self.driver, 12).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "[data-testid='search-result-card']"))
             )
-            time.sleep(3)
+            time.sleep(2)
             soup = BeautifulSoup(self.driver.page_source, 'html.parser')
             self.parse_results(soup)
 
         except Exception as e:
             logging.warning(f"⚠️ Page failed to load: {e}")
+            try:
+                self.driver.save_screenshot("applyboard_error.png")
+                logging.info("📸 Saved applyboard_error.png")
+            except Exception as se:
+                logging.warning(f"Could not save screenshot: {se}")
 
     def parse_results(self, soup):
         cards = soup.select("[data-testid='search-result-card']")
